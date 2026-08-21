@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>New match</title>
+<!-- Set this at render time, or set window.FOOTGRID_MATCH_SETUP_CONFIG before this page script. -->
+<script id="match-setup-config" type="application/json">{"organizationId":""}</script>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -55,6 +57,10 @@ input::placeholder{color:#B5B2AA}
 
 .count{font-size:11.5px;color:var(--mute);margin-top:9px;text-align:center}
 .count b{color:var(--ink)}
+.validation{margin-top:10px;padding:9px 11px;border-radius:8px;background:#FCE9E2;color:#96350F;font-size:11.5px;line-height:1.45}
+.validation.ok{background:#E4F4EC;color:#08713C}
+.sh-input{width:30px;height:30px;padding:0;margin:0;text-align:center;appearance:textfield}
+.sh-input::-webkit-inner-spin-button,.sh-input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 
 .go{margin:0;padding:16px;background:var(--paper-2);border-top:1px solid var(--rule)}
 .kick{width:100%;padding:16px;background:var(--volt);color:#fff;border:0;border-radius:11px;font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;cursor:pointer}
@@ -94,28 +100,29 @@ input::placeholder{color:#B5B2AA}
   </div>
 
   <div class="step">
-    <div class="lbl"><span class="n">4</span>Home squad</div>
+    <div class="lbl"><span class="n">4</span><span id="squad-title">Home squad</span></div>
     <div class="chips" style="margin-bottom:11px">
-      <button class="ch on">Gachibowli FC</button>
-      <button class="ch">Kondapur SC</button>
+      <button class="ch on" id="home-chip" type="button" aria-pressed="true"></button>
+      <button class="ch" id="away-chip" type="button" aria-pressed="false"></button>
     </div>
     <div class="roster" id="roster"></div>
-    <button class="add" id="add">+ Add by mobile number</button>
+    <button class="add" id="add" type="button">+ Add by mobile number</button>
     <div class="count" id="count"></div>
+    <div class="validation" id="validation" role="status" aria-live="polite"></div>
   </div>
 
   <div class="go">
-    <button class="kick" id="kick">Kick off</button>
+    <button class="kick" id="kick" type="button">Create draft</button>
   </div>
 
 </div>
 
 <script>
 var formats=[
-  {v:"5v5",s:"futsal",n:5,pos:["GK","DEF","MID","ATT"],mins:30},
-  {v:"6v6",s:"most common",n:6,pos:["GK","DEF","MID","ATT"],mins:40},
-  {v:"8v8",s:"turf",n:8,pos:["GK","CB","LB","RB","CM","LW","RW","ST"],mins:50},
-  {v:"11v11",s:"full pitch",n:11,pos:["GK","CB","LB","RB","CDM","CM","CAM","LW","RW","ST"],mins:90}
+  {v:"5v5",apiCode:"5V5",s:"futsal",n:5,pos:["GK","DEF","MID","ATT"],mins:30},
+  {v:"6v6",apiCode:"6V6",s:"most common",n:6,pos:["GK","DEF","MID","ATT"],mins:40},
+  {v:"8v8",apiCode:"8V8",s:"turf",n:8,pos:["GK","CB","LB","RB","CM","LW","RW","ST"],mins:50},
+  {v:"11v11",apiCode:"11V11",s:"full pitch",n:11,pos:["GK","CB","LB","RB","CDM","CM","CAM","LW","RW","ST"],mins:90}
 ];
 
 var notes={
@@ -125,66 +132,134 @@ var notes={
   "11v11":"All ten outfield roles. Per-90 stats work properly at this length."
 };
 
-var squad=[
-  {no:1,n:"Sunil Bhat",m:"98490 21114",p:"GK",fresh:false},
-  {no:4,n:"Vikram Singh",m:"90005 77821",p:"DEF",fresh:false},
-  {no:6,n:"Imran Sheikh",m:"73825 40910",p:"MID",fresh:false},
-  {no:8,n:"Karan Joshi",m:"99590 13376",p:"MID",fresh:false},
-  {no:9,n:"Arjun Khanna",m:"81250 66042",p:"ATT",fresh:false},
-  {no:11,n:"Rahul Menon",m:"70931 28855",p:"ATT",fresh:true}
+/* Deployment supplies organizationId here or as window.FOOTGRID_MATCH_SETUP_CONFIG. */
+function readPageConfig(){
+  var config={},node=document.getElementById("match-setup-config");
+  if(node && node.textContent.trim())try{config=JSON.parse(node.textContent);}catch(error){}
+  var override=window.FOOTGRID_MATCH_SETUP_CONFIG;
+  if(override && typeof override==="object")Object.keys(override).forEach(function(key){config[key]=override[key];});
+  var organizationId=config.organizationId || config.organization_id;
+  return {organizationId:typeof organizationId==="string"?organizationId.trim():""};
+}
+var pageConfig=readPageConfig();
+var uuidPattern=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+var homeSquad=[
+  {id:"2a004d83-5b2d-4e67-9fe7-4e0efeb91e10",shirtNumber:1,displayName:"Sunil Bhat",mobile:"98490 21114",positionCode:"GK",isNew:false},
+  {id:"c0bd36b9-6f09-4ea0-9bdd-6d7cfe8421fd",shirtNumber:4,displayName:"Vikram Singh",mobile:"90005 77821",positionCode:"DEF",isNew:false},
+  {id:"7f7fa3a1-fadf-47d8-b289-45d7c2762b43",shirtNumber:6,displayName:"Imran Sheikh",mobile:"73825 40910",positionCode:"MID",isNew:false},
+  {id:"17be2a6d-4f75-418c-90c0-fc8efc020d36",shirtNumber:8,displayName:"Karan Joshi",mobile:"99590 13376",positionCode:"MID",isNew:false},
+  {id:"d895ea50-5be2-4a0b-8ad6-cf715c3661c2",shirtNumber:9,displayName:"Arjun Khanna",mobile:"81250 66042",positionCode:"ATT",isNew:false},
+  {id:"bea8e047-64e2-4616-bf88-03d2d113fbde",shirtNumber:11,displayName:"Rahul Menon",mobile:"70931 28855",positionCode:"ATT",isNew:true}
 ];
-
-var pool=[
-  {n:"Dev Prasad",m:"96768 30294"},{n:"Sameer Tandon",m:"82470 51163"},
-  {n:"Nikhil Rao",m:"89850 74420"},{n:"Aditya Gupta",m:"77020 96138"},
-  {n:"Manav Desai",m:"93470 22507"}
+var awaySquad=[
+  {id:"4c25d47d-1b5b-44ee-b42d-7c6520b0a5f2",shirtNumber:1,displayName:"Amit Verma",mobile:"98765 11422",positionCode:"GK",isNew:false},
+  {id:"d2d0a5f8-8bf2-4d8e-9b46-16eec8e5f269",shirtNumber:3,displayName:"Rohit Kumar",mobile:"93481 55104",positionCode:"DEF",isNew:false},
+  {id:"d8d7e6e4-2ad4-4ced-a78e-4d5b9f547e86",shirtNumber:5,displayName:"Faizan Ali",mobile:"81066 39170",positionCode:"MID",isNew:false},
+  {id:"c1530fbf-a35b-4980-98b6-7f0a8ef7733d",shirtNumber:7,displayName:"Naveen Reddy",mobile:"97015 82048",positionCode:"MID",isNew:false},
+  {id:"a1f9d026-071c-4c95-8c77-9228eec45d77",shirtNumber:10,displayName:"Harish Patel",mobile:"98220 44517",positionCode:"ATT",isNew:false},
+  {id:"8a3d6f92-e8f9-4b5f-a4d1-7712c836416f",shirtNumber:12,displayName:"Sanjay Das",mobile:"90142 77391",positionCode:"ATT",isNew:true}
 ];
-
-var pick=1;
+var availableParticipants=[
+  {id:"f27bc8a7-8214-4bb2-8bdd-b36a9f9f10c2",displayName:"Dev Prasad",mobile:"96768 30294"},
+  {id:"81ea28cb-c3e3-42c1-bec7-9f37eecbaa6c",displayName:"Sameer Tandon",mobile:"82470 51163"},
+  {id:"9f8b5369-3bbb-43fd-968e-f68cf4bb65ee",displayName:"Nikhil Rao",mobile:"89850 74420"},
+  {id:"b2bc5baa-892b-4ff8-8ee1-96edaf091ce9",displayName:"Aditya Gupta",mobile:"77020 96138"},
+  {id:"51488a76-9df7-42fa-8663-0a4c0a6643fa",displayName:"Manav Desai",mobile:"93470 22507"}
+];
+var pick=1,activeSide="HOME";
 function $(id){return document.getElementById(id);}
-
+function activeSquad(){return activeSide==="HOME"?homeSquad:awaySquad;}
+function teamName(side){return $(side==="HOME"?"th":"ta").value.trim() || (side==="HOME"?"Home":"Away");}
+function defaultPosition(index){var positions=formats[pick].pos;return positions[Math.min(index,positions.length-1)];}
+function syncPositions(){[homeSquad,awaySquad].forEach(function(squad){squad.forEach(function(participant,index){participant.positionCode=defaultPosition(index);});});}
+function nextShirtNumber(squad){
+  var used={};squad.forEach(function(participant){used[participant.shirtNumber]=true;});
+  for(var number=1;number<=99;number++)if(!used[number])return number;
+  return null;
+}
+function sideValidation(side,squad,need){
+  var problems=[],shirts={};
+  if(squad.length<need)problems.push(teamName(side)+" needs "+(need-squad.length)+" more player"+(need-squad.length===1?"":"s"));
+  squad.forEach(function(participant){
+    var number=participant.shirtNumber;
+    if(!Number.isInteger(number) || number<1 || number>99)problems.push(teamName(side)+" has an invalid shirt number");
+    else if(shirts[number])problems.push(teamName(side)+" has duplicate shirt number "+number);
+    else shirts[number]=true;
+    if(!uuidPattern.test(participant.id))problems.push(teamName(side)+" has a participant without a valid ID");
+  });
+  return problems;
+}
+function validationState(){
+  var problems=[],minutes=Number($("mins").value),periods=Number($("halves").value);
+  if(!uuidPattern.test(pageConfig.organizationId))problems.push("Set a valid organization UUID in the page configuration before creating a draft");
+  if(!$("th").value.trim())problems.push("Enter a home team name");
+  if(!$("ta").value.trim())problems.push("Enter an away team name");
+  if(!Number.isInteger(minutes) || minutes<10 || minutes>180)problems.push("Match length must be between 10 and 180 minutes");
+  if(!Number.isInteger(periods) || periods<1 || periods>4)problems.push("Halves must be between 1 and 4");
+  problems=problems.concat(sideValidation("HOME",homeSquad,formats[pick].n),sideValidation("AWAY",awaySquad,formats[pick].n));
+  return {valid:problems.length===0,problems:problems};
+}
+function renderValidation(){
+  var state=validationState();
+  $("kick").disabled=!state.valid;
+  $("validation").className="validation"+(state.valid?" ok":"");
+  $("validation").textContent=state.valid?"Both squads are ready. The draft-create payload has the API field names and units.":state.problems.join(". ")+".";
+}
+function buildCreateMatchPayload(){
+  var payload={organization_id:pageConfig.organizationId,format_code:formats[pick].apiCode,players_per_side:formats[pick].n,period_count:Number($("halves").value),total_duration_seconds:Number($("mins").value)*60,home:{display_name:$("th").value.trim()},away:{display_name:$("ta").value.trim()}};
+  var venue=$("ground").value.trim();if(venue)payload.venue_name=venue;
+  return payload;
+}
 function fmtUI(){
   $("fmt").innerHTML="";
   formats.forEach(function(f,i){
-    var b=document.createElement("button");
-    b.className="f"+(pick===i?" on":"");
-    b.innerHTML='<span class="v">'+f.v+'</span><span class="s">'+f.s+'</span>';
-    b.onclick=function(){pick=i;$("mins").value=f.mins;fmtUI();rosterUI();};
-    $("fmt").appendChild(b);
+    var button=document.createElement("button");button.type="button";button.className="f"+(pick===i?" on":"");
+    button.innerHTML='<span class="v">'+f.v+'</span><span class="s">'+f.s+'</span>';
+    button.onclick=function(){pick=i;$("mins").value=f.mins;syncPositions();fmtUI();rosterUI();};$("fmt").appendChild(button);
   });
   $("fnote").textContent=notes[formats[pick].v];
 }
-
-function rosterUI(){
-  var f=formats[pick];
-  $("roster").innerHTML="";
-  squad.forEach(function(p,i){
-    var d=document.createElement("div");
-    d.className="row";
-    d.innerHTML='<span class="sh">'+p.no+'</span>'+
-      '<span class="who"><span class="nm">'+p.n+'</span><br><span class="mob">'+p.m+'</span></span>'+
-      '<span class="pos'+(p.fresh?" new":"")+'">'+p.p+'</span>'+
-      '<button class="del" data-i="'+i+'">&times;</button>';
-    $("roster").appendChild(d);
+function renderChips(){
+  ["HOME","AWAY"].forEach(function(side){
+    var chip=$(side==="HOME"?"home-chip":"away-chip"),selected=activeSide===side;
+    chip.className="ch"+(selected?" on":"");chip.setAttribute("aria-pressed",String(selected));chip.textContent=teamName(side);
   });
-  document.querySelectorAll(".del").forEach(function(b){
-    b.onclick=function(){squad.splice(parseInt(b.dataset.i,10),1);rosterUI();};
+  $("squad-title").textContent=teamName(activeSide)+" squad";
+}
+function rosterUI(){
+  var squad=activeSquad(),f=formats[pick];$("roster").innerHTML="";
+  squad.forEach(function(participant,index){
+    var row=document.createElement("div");row.className="row";
+    var shirt=document.createElement("input");shirt.className="sh sh-input";shirt.type="number";shirt.min="1";shirt.max="99";shirt.inputMode="numeric";shirt.setAttribute("aria-label",participant.displayName+" shirt number");shirt.value=participant.shirtNumber;
+    shirt.oninput=function(){participant.shirtNumber=Number(shirt.value);renderValidation();};
+    var who=document.createElement("span");who.className="who";
+    var name=document.createElement("span");name.className="nm";name.textContent=participant.displayName;
+    var mobile=document.createElement("span");mobile.className="mob";mobile.textContent=participant.mobile;
+    who.appendChild(name);who.appendChild(document.createElement("br"));who.appendChild(mobile);
+    var position=document.createElement("span");position.className="pos"+(participant.isNew?" new":"");position.textContent=participant.positionCode;
+    var remove=document.createElement("button");remove.className="del";remove.type="button";remove.setAttribute("aria-label","Remove "+participant.displayName);remove.innerHTML="&times;";remove.onclick=function(){squad.splice(index,1);rosterUI();};
+    row.appendChild(shirt);row.appendChild(who);row.appendChild(position);row.appendChild(remove);$("roster").appendChild(row);
   });
   var need=f.n,have=squad.length;
   $("count").innerHTML="<b>"+have+"</b> added &middot; "+f.v+" needs <b>"+need+"</b> on the pitch"+(have>need?" &middot; "+(have-need)+" on the bench":have<need?" &middot; "+(need-have)+" more":"");
-  $("kick").disabled=have<2;
+  $("add").disabled=availableParticipants.length===0 || nextShirtNumber(squad)===null;
+  renderChips();renderValidation();
 }
-
+function selectSide(side){activeSide=side;rosterUI();}
+$("home-chip").onclick=function(){selectSide("HOME");};
+$("away-chip").onclick=function(){selectSide("AWAY");};
 $("add").onclick=function(){
-  if(!pool.length)return;
-  var p=pool.shift();
-  var used=squad.map(function(s){return s.no;});
-  var no=2;while(used.indexOf(no)>-1)no++;
-  var f=formats[pick];
-  squad.push({no:no,n:p.n,m:p.m,p:f.pos[Math.min(squad.length,f.pos.length-1)],fresh:true});
-  rosterUI();
+  var squad=activeSquad(),shirtNumber=nextShirtNumber(squad);if(!availableParticipants.length || shirtNumber===null)return;
+  var participant=availableParticipants.shift();
+  squad.push({id:participant.id,shirtNumber:shirtNumber,displayName:participant.displayName,mobile:participant.mobile,positionCode:defaultPosition(squad.length),isNew:true});rosterUI();
 };
-
+["ground","mins","halves","th","ta"].forEach(function(id){$(id).addEventListener("input",function(){renderChips();renderValidation();});});
+$("kick").onclick=function(){
+  var state=validationState();if(!state.valid){renderValidation();return;}
+  $("validation").className="validation ok";$("validation").textContent="Draft request is ready. Match creation is intentionally added in the next setup slice.";
+};
+/* Slice 2 consumes this without reinterpreting the page values. */
+window.FootGridMatchSetup={getState:function(){return {homeSquad:homeSquad.slice(),awaySquad:awaySquad.slice()};},validate:validationState,buildCreateMatchPayload:buildCreateMatchPayload};
 fmtUI();rosterUI();
 </script>
 </body>
