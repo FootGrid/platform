@@ -1,0 +1,1261 @@
+openapi: 3.1.0
+info:
+  title: FootGrid Core API
+  version: 1.0.0
+  description: |
+    Core contract for organizations, football teams, match setup, offline-safe live
+    logging, and read models. Authentication is an Amazon Cognito JWT bearer token.
+    All IDs are UUIDs. Mutations require an Idempotency-Key header; match-event
+    append additionally requires expected_sequence for optimistic concurrency.
+servers:
+  - url: https://api.footgrid.example/v1
+    description: Production
+  - url: https://api.staging.footgrid.example/v1
+    description: Staging
+tags:
+  - name: Me
+  - name: Organizations
+  - name: People
+  - name: Teams
+  - name: Competitions
+  - name: Matches
+  - name: Live logging
+  - name: Read models
+  - name: Public
+security:
+  - cognitoBearer: []
+paths:
+  /me:
+    get:
+      tags: [Me]
+      operationId: getMe
+      summary: Return the caller's FootGrid profile and active memberships.
+      responses:
+        '200':
+          description: Profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MeResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /organizations:
+    get:
+      tags: [Organizations]
+      operationId: listOrganizations
+      summary: List organizations to which the caller belongs.
+      responses:
+        '200':
+          description: Organization page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrganizationList' }
+    post:
+      tags: [Organizations]
+      operationId: createOrganization
+      summary: Create an organization and make the caller its owner.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/CreateOrganizationRequest' } }
+      responses:
+        '201':
+          description: Created organization
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/Organization' } }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /organizations/{organizationId}:
+    parameters: [{ $ref: '#/components/parameters/OrganizationId' }]
+    get:
+      tags: [Organizations]
+      operationId: getOrganization
+      summary: Get an organization the caller belongs to.
+      responses:
+        '200': { $ref: '#/components/responses/OrganizationResponse' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    patch:
+      tags: [Organizations]
+      operationId: updateOrganization
+      summary: Update organization metadata. Requires OWNER or ADMIN.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/UpdateOrganizationRequest' } }
+      responses:
+        '200': { $ref: '#/components/responses/OrganizationResponse' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /organizations/{organizationId}/members:
+    parameters: [{ $ref: '#/components/parameters/OrganizationId' }]
+    get:
+      tags: [Organizations]
+      operationId: listMembers
+      summary: List memberships. PII is limited by caller role.
+      parameters: [{ $ref: '#/components/parameters/Cursor' }, { $ref: '#/components/parameters/Limit' }]
+      responses:
+        '200':
+          description: Member page
+          content: { application/json: { schema: { $ref: '#/components/schemas/MemberList' } } }
+    post:
+      tags: [Organizations]
+      operationId: inviteMember
+      summary: Invite a member by phone or email. Requires ADMIN or ORGANIZER.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreateMemberRequest' } } }
+      responses:
+        '201':
+          description: Membership/invitation created
+          content: { application/json: { schema: { $ref: '#/components/schemas/Member' } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /organizations/{organizationId}/members/{memberId}:
+    parameters:
+      - { $ref: '#/components/parameters/OrganizationId' }
+      - name: memberId
+        in: path
+        required: true
+        schema: { $ref: '#/components/schemas/Uuid' }
+    patch:
+      tags: [Organizations]
+      operationId: updateMemberRole
+      summary: Change a membership role or deactivate it. Requires OWNER/ADMIN.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/UpdateMemberRequest' } } }
+      responses:
+        '200':
+          description: Updated membership
+          content: { application/json: { schema: { $ref: '#/components/schemas/Member' } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /organizations/{organizationId}/players:
+    parameters: [{ $ref: '#/components/parameters/OrganizationId' }]
+    get:
+      tags: [People]
+      operationId: listPlayers
+      summary: Search display-name player profiles in the organization.
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string, maxLength: 100 }
+        - { $ref: '#/components/parameters/Cursor' }
+        - { $ref: '#/components/parameters/Limit' }
+      responses:
+        '200':
+          description: Player page
+          content: { application/json: { schema: { $ref: '#/components/schemas/PlayerList' } } }
+    post:
+      tags: [People]
+      operationId: createPlayer
+      summary: Create an organization player profile. Requires manager permission.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreatePlayerRequest' } } }
+      responses:
+        '201':
+          description: Player created
+          content: { application/json: { schema: { $ref: '#/components/schemas/Player' } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /organizations/{organizationId}/players:lookup:
+    parameters: [{ $ref: '#/components/parameters/OrganizationId' }]
+    post:
+      tags: [People]
+      operationId: lookupPlayerByPhone
+      summary: Resolve a player for roster entry by E.164 phone number.
+      description: Requires TEAM_MANAGER, SCORER, ORGANIZER, ADMIN, or OWNER. Rate limited and audited.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/PhoneLookupRequest' } } }
+      responses:
+        '200':
+          description: Minimal eligible player profile; `found=false` does not disclose external users.
+          content: { application/json: { schema: { $ref: '#/components/schemas/PhoneLookupResponse' } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /teams:
+    get:
+      tags: [Teams]
+      operationId: listTeams
+      summary: List teams in an organization.
+      parameters:
+        - { $ref: '#/components/parameters/OrganizationQuery' }
+        - { $ref: '#/components/parameters/Cursor' }
+        - { $ref: '#/components/parameters/Limit' }
+      responses:
+        '200':
+          description: Team page
+          content: { application/json: { schema: { $ref: '#/components/schemas/TeamList' } } }
+    post:
+      tags: [Teams]
+      operationId: createTeam
+      summary: Create a team.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreateTeamRequest' } } }
+      responses:
+        '201':
+          description: Team created
+          content: { application/json: { schema: { $ref: '#/components/schemas/Team' } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /teams/{teamId}:
+    parameters: [{ $ref: '#/components/parameters/TeamId' }]
+    get:
+      tags: [Teams]
+      operationId: getTeam
+      summary: Get a team.
+      responses:
+        '200': { $ref: '#/components/responses/TeamResponse' }
+    patch:
+      tags: [Teams]
+      operationId: updateTeam
+      summary: Update team metadata.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/UpdateTeamRequest' } } }
+      responses:
+        '200': { $ref: '#/components/responses/TeamResponse' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /teams/{teamId}/members:
+    parameters: [{ $ref: '#/components/parameters/TeamId' }]
+    get:
+      tags: [Teams]
+      operationId: listTeamMembers
+      summary: List current team membership and defaults.
+      responses:
+        '200':
+          description: Team members
+          content: { application/json: { schema: { $ref: '#/components/schemas/TeamMemberList' } } }
+    put:
+      tags: [Teams]
+      operationId: replaceTeamMembers
+      summary: Replace the team membership set. Requires team manager.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ReplaceTeamMembersRequest' } } }
+      responses:
+        '200':
+          description: Current member set
+          content: { application/json: { schema: { $ref: '#/components/schemas/TeamMemberList' } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /venues:
+    get:
+      tags: [Competitions]
+      operationId: listVenues
+      summary: List venues in an organization.
+      parameters: [{ $ref: '#/components/parameters/OrganizationQuery' }, { $ref: '#/components/parameters/Cursor' }]
+      responses:
+        '200':
+          description: Venue page
+          content: { application/json: { schema: { $ref: '#/components/schemas/VenueList' } } }
+    post:
+      tags: [Competitions]
+      operationId: createVenue
+      summary: Create a reusable venue.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreateVenueRequest' } } }
+      responses:
+        '201':
+          description: Venue created
+          content: { application/json: { schema: { $ref: '#/components/schemas/Venue' } } }
+  /competitions:
+    get:
+      tags: [Competitions]
+      operationId: listCompetitions
+      summary: List competitions in an organization.
+      parameters: [{ $ref: '#/components/parameters/OrganizationQuery' }, { $ref: '#/components/parameters/Cursor' }]
+      responses:
+        '200':
+          description: Competition page
+          content: { application/json: { schema: { $ref: '#/components/schemas/CompetitionList' } } }
+    post:
+      tags: [Competitions]
+      operationId: createCompetition
+      summary: Create a league, knockout, or hybrid competition.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreateCompetitionRequest' } } }
+      responses:
+        '201':
+          description: Competition created
+          content: { application/json: { schema: { $ref: '#/components/schemas/Competition' } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /competitions/{competitionId}/fixtures:
+    parameters:
+      - name: competitionId
+        in: path
+        required: true
+        schema: { $ref: '#/components/schemas/Uuid' }
+    get:
+      tags: [Competitions]
+      operationId: listFixtures
+      summary: List fixtures, optionally by stage or date range.
+      parameters:
+        - name: stage_id
+          in: query
+          schema: { $ref: '#/components/schemas/Uuid' }
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: Fixture page
+          content: { application/json: { schema: { $ref: '#/components/schemas/MatchList' } } }
+  /competitions/{competitionId}/standings:
+    parameters:
+      - name: competitionId
+        in: path
+        required: true
+        schema: { $ref: '#/components/schemas/Uuid' }
+    get:
+      tags: [Read models]
+      operationId: getCompetitionStandings
+      summary: Read current calculated standings.
+      responses:
+        '200':
+          description: Standing read model
+          content: { application/json: { schema: { $ref: '#/components/schemas/Standings' } } }
+  /matches:
+    get:
+      tags: [Matches]
+      operationId: listMatches
+      summary: List matches visible to the caller.
+      parameters:
+        - { $ref: '#/components/parameters/OrganizationQuery' }
+        - name: status
+          in: query
+          schema: { type: string, enum: [DRAFT, SCHEDULED, READY, LIVE, PAUSED, COMPLETED, FINALIZED, ABANDONED] }
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - { $ref: '#/components/parameters/Cursor' }
+        - { $ref: '#/components/parameters/Limit' }
+      responses:
+        '200':
+          description: Match page
+          content: { application/json: { schema: { $ref: '#/components/schemas/MatchList' } } }
+    post:
+      tags: [Matches]
+      operationId: createMatch
+      summary: Create a draft match from the setup screen.
+      description: |
+        `format` supports 5v5, 6v6, 8v8, and 11v11 presets as well as a validated
+        custom configuration. Provide team IDs for known teams or names for one-off teams.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreateMatchRequest' } } }
+      responses:
+        '201':
+          description: Draft match created
+          content: { application/json: { schema: { $ref: '#/components/schemas/MatchDetail' } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /matches/{matchId}:
+    parameters: [{ $ref: '#/components/parameters/MatchId' }]
+    get:
+      tags: [Matches]
+      operationId: getMatch
+      summary: Get match configuration, roster and authoritative live state.
+      responses:
+        '200':
+          description: Match detail
+          content: { application/json: { schema: { $ref: '#/components/schemas/MatchDetail' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Matches]
+      operationId: updateMatch
+      summary: Edit a DRAFT or SCHEDULED match configuration.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/UpdateMatchRequest' } } }
+      responses:
+        '200':
+          description: Updated match
+          content: { application/json: { schema: { $ref: '#/components/schemas/MatchDetail' } } }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /matches/{matchId}/roster:
+    parameters: [{ $ref: '#/components/parameters/MatchId' }]
+    get:
+      tags: [Matches]
+      operationId: getMatchRoster
+      summary: Get both match squads, including anonymous opposition participants.
+      responses:
+        '200':
+          description: Roster
+          content: { application/json: { schema: { $ref: '#/components/schemas/MatchRoster' } } }
+    put:
+      tags: [Matches]
+      operationId: replaceMatchRoster
+      summary: Replace a DRAFT/READY roster snapshot.
+      description: In a LIVE match use roster amendment events instead; direct roster replacement is rejected.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ReplaceRosterRequest' } } }
+      responses:
+        '200':
+          description: Current roster
+          content: { application/json: { schema: { $ref: '#/components/schemas/MatchRoster' } } }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /matches/{matchId}/lineups:
+    parameters: [{ $ref: '#/components/parameters/MatchId' }]
+    get:
+      tags: [Matches]
+      operationId: getMatchLineups
+      summary: Get the current on-pitch/bench state and pitch slots.
+      responses:
+        '200':
+          description: Lineup snapshot
+          content: { application/json: { schema: { $ref: '#/components/schemas/LineupSnapshot' } } }
+    put:
+      tags: [Matches]
+      operationId: setInitialLineups
+      summary: Set initial lineups before kickoff.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/SetLineupsRequest' } } }
+      responses:
+        '200':
+          description: Current lineups
+          content: { application/json: { schema: { $ref: '#/components/schemas/LineupSnapshot' } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /matches/{matchId}/status:
+    parameters: [{ $ref: '#/components/parameters/MatchId' }]
+    post:
+      tags: [Matches]
+      operationId: transitionMatchStatus
+      summary: Move a match through its lifecycle.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/MatchStatusCommand' } } }
+      responses:
+        '200':
+          description: Updated status and score
+          content: { application/json: { schema: { $ref: '#/components/schemas/LiveSnapshot' } } }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /matches/{matchId}/live-session:
+    parameters: [{ $ref: '#/components/parameters/MatchId' }]
+    post:
+      tags: [Live logging]
+      operationId: createLiveSession
+      summary: Start a server-authoritative live clock and assign an active scorer.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreateLiveSessionRequest' } } }
+      responses:
+        '201':
+          description: Live session started
+          content: { application/json: { schema: { $ref: '#/components/schemas/LiveSession' } } }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /matches/{matchId}/live-session:command:
+    parameters: [{ $ref: '#/components/parameters/MatchId' }]
+    post:
+      tags: [Live logging]
+      operationId: commandLiveSession
+      summary: Pause, resume, end a period, start next period, or end the live clock.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/LiveSessionCommand' } } }
+      responses:
+        '200':
+          description: Updated live session
+          content: { application/json: { schema: { $ref: '#/components/schemas/LiveSession' } } }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /matches/{matchId}/events:
+    parameters: [{ $ref: '#/components/parameters/MatchId' }]
+    get:
+      tags: [Live logging]
+      operationId: listMatchEvents
+      summary: Read the authoritative event ledger after a sequence or cursor.
+      parameters:
+        - name: after_sequence
+          in: query
+          schema: { type: integer, minimum: 0 }
+        - { $ref: '#/components/parameters/Cursor' }
+        - { $ref: '#/components/parameters/Limit' }
+        - name: include_reversed
+          in: query
+          schema: { type: boolean, default: true }
+      responses:
+        '200':
+          description: Ordered event page
+          content: { application/json: { schema: { $ref: '#/components/schemas/MatchEventList' } } }
+    post:
+      tags: [Live logging]
+      operationId: appendMatchEvent
+      summary: Append an immutable event to the live match ledger.
+      description: |
+        The server returns the original successful response when the same
+        `client_event_id` or Idempotency-Key is retried. A stale expected_sequence
+        receives `409` and `current_snapshot` so the client can rebase.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AppendMatchEventRequest' } } }
+      responses:
+        '201':
+          description: Event committed
+          content: { application/json: { schema: { $ref: '#/components/schemas/AppendEventResponse' } } }
+        '409':
+          description: Event sequence changed; re-fetch/rebase before retrying.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ConflictProblem' } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /matches/{matchId}/events/{eventId}/reverse:
+    parameters:
+      - { $ref: '#/components/parameters/MatchId' }
+      - name: eventId
+        in: path
+        required: true
+        schema: { $ref: '#/components/schemas/Uuid' }
+    post:
+      tags: [Live logging]
+      operationId: reverseMatchEvent
+      summary: Append an audited compensating reversal; never deletes the original event.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ReverseEventRequest' } } }
+      responses:
+        '201':
+          description: Reversal committed
+          content: { application/json: { schema: { $ref: '#/components/schemas/AppendEventResponse' } } }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /matches/{matchId}/snapshot:
+    parameters: [{ $ref: '#/components/parameters/MatchId' }]
+    get:
+      tags: [Read models]
+      operationId: getMatchSnapshot
+      summary: Return the current score, clock, lineups, timeline and projection sequence.
+      responses:
+        '200':
+          description: Authoritative command state plus projection freshness metadata.
+          content: { application/json: { schema: { $ref: '#/components/schemas/MatchSnapshot' } } }
+  /matches/{matchId}/stats:
+    parameters: [{ $ref: '#/components/parameters/MatchId' }]
+    get:
+      tags: [Read models]
+      operationId: getMatchStats
+      summary: Return derived team and player match stats.
+      responses:
+        '200':
+          description: Derived statistics with ledger sequence used.
+          content: { application/json: { schema: { $ref: '#/components/schemas/MatchStats' } } }
+  /action-catalog:
+    get:
+      tags: [Live logging]
+      operationId: listActionCatalog
+      summary: Return versioned actions valid for a format and player role.
+      parameters:
+        - name: format_code
+          in: query
+          schema: { type: string, example: 6V6 }
+        - name: position_code
+          in: query
+          schema: { type: string, example: MID }
+      responses:
+        '200':
+          description: Action definitions
+          content: { application/json: { schema: { $ref: '#/components/schemas/ActionCatalogResponse' } } }
+  /public/matches/{matchId}:
+    security: []
+    parameters: [{ $ref: '#/components/parameters/MatchId' }]
+    get:
+      tags: [Public]
+      operationId: getPublicMatch
+      summary: Get the public-safe live match card and recent timeline.
+      responses:
+        '200':
+          description: Public match feed
+          headers:
+            Cache-Control: { schema: { type: string, example: public, max-age=5 } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/PublicMatch' } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /realtime/token:
+    post:
+      tags: [Read models]
+      operationId: createRealtimeToken
+      summary: Mint a short-lived signed token for WebSocket match subscriptions.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreateRealtimeTokenRequest' } } }
+      responses:
+        '201':
+          description: Realtime connection details
+          content: { application/json: { schema: { $ref: '#/components/schemas/RealtimeToken' } } }
+components:
+  securitySchemes:
+    cognitoBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Cognito access token. API validates issuer, audience, expiry and signature.
+  parameters:
+    OrganizationId:
+      name: organizationId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Uuid' }
+    OrganizationQuery:
+      name: organization_id
+      in: query
+      required: true
+      schema: { $ref: '#/components/schemas/Uuid' }
+    TeamId:
+      name: teamId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Uuid' }
+    MatchId:
+      name: matchId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Uuid' }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 16, maxLength: 128 }
+      description: A random stable key reused only for retries of the exact request.
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string, maxLength: 512 }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 30 }
+  responses:
+    Unauthorized:
+      description: Missing or invalid JWT.
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    Forbidden:
+      description: The caller lacks permission in this organization or match.
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    NotFound:
+      description: Resource not found or not visible to caller.
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    Conflict:
+      description: Resource state conflicts with the requested operation.
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/ConflictProblem' } } }
+    ValidationError:
+      description: Request is syntactically valid but violates a domain rule.
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/ValidationProblem' } } }
+    RateLimited:
+      description: Too many requests.
+      headers: { Retry-After: { schema: { type: integer } } }
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    OrganizationResponse:
+      description: Organization
+      content: { application/json: { schema: { $ref: '#/components/schemas/Organization' } } }
+    TeamResponse:
+      description: Team
+      content: { application/json: { schema: { $ref: '#/components/schemas/Team' } } }
+  schemas:
+    Uuid: { type: string, format: uuid }
+    Timestamp: { type: string, format: date-time }
+    CursorPage:
+      type: object
+      required: [items]
+      properties:
+        next_cursor: { type: [string, 'null'] }
+    Problem:
+      type: object
+      required: [type, title, status, trace_id]
+      properties:
+        type: { type: string, format: uri, example: 'https://api.footgrid.example/problems/forbidden' }
+        title: { type: string, example: Forbidden }
+        status: { type: integer, example: 403 }
+        detail: { type: string }
+        instance: { type: string, format: uri }
+        trace_id: { type: string }
+    ConflictProblem:
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          properties:
+            current_sequence: { type: integer, minimum: 0 }
+            current_snapshot: { $ref: '#/components/schemas/LiveSnapshot' }
+    ValidationProblem:
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          properties:
+            errors:
+              type: array
+              items:
+                type: object
+                required: [field, code]
+                properties:
+                  field: { type: string, example: 'roster.home[0].shirt_number' }
+                  code: { type: string, example: duplicate_shirt_number }
+                  message: { type: string }
+    Organization:
+      type: object
+      required: [id, name, slug, timezone, created_at]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        name: { type: string, minLength: 2, maxLength: 120 }
+        slug: { type: string, pattern: '^[a-z0-9-]{3,80}$' }
+        timezone: { type: string, example: Asia/Kolkata }
+        logo_url: { type: [string, 'null'], format: uri }
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+    CreateOrganizationRequest:
+      type: object
+      required: [name, timezone]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 120 }
+        timezone: { type: string, example: Asia/Kolkata }
+        slug: { type: string, pattern: '^[a-z0-9-]{3,80}$' }
+    UpdateOrganizationRequest:
+      type: object
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 2, maxLength: 120 }
+        timezone: { type: string }
+        logo_url: { type: [string, 'null'], format: uri }
+    OrganizationList:
+      allOf:
+        - $ref: '#/components/schemas/CursorPage'
+        - type: object
+          properties: { items: { type: array, items: { $ref: '#/components/schemas/Organization' } } }
+    MemberRole: { type: string, enum: [OWNER, ADMIN, ORGANIZER, TEAM_MANAGER, SCORER, REFEREE, COACH, PLAYER, PARENT, FAN] }
+    Member:
+      type: object
+      required: [id, organization_id, role, status]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        organization_id: { $ref: '#/components/schemas/Uuid' }
+        user_id: { type: [string, 'null'], format: uuid }
+        role: { $ref: '#/components/schemas/MemberRole' }
+        status: { type: string, enum: [INVITED, ACTIVE, SUSPENDED, REMOVED] }
+        display_name: { type: [string, 'null'] }
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+    CreateMemberRequest:
+      type: object
+      required: [role]
+      oneOf:
+        - required: [email]
+        - required: [phone_e164]
+      properties:
+        email: { type: string, format: email }
+        phone_e164: { type: string, pattern: '^\+[1-9][0-9]{7,14}$' }
+        role: { $ref: '#/components/schemas/MemberRole' }
+    UpdateMemberRequest:
+      type: object
+      minProperties: 1
+      properties:
+        role: { $ref: '#/components/schemas/MemberRole' }
+        status: { type: string, enum: [ACTIVE, SUSPENDED, REMOVED] }
+    MemberList:
+      allOf:
+        - $ref: '#/components/schemas/CursorPage'
+        - type: object
+          properties: { items: { type: array, items: { $ref: '#/components/schemas/Member' } } }
+    MeResponse:
+      type: object
+      required: [user, memberships]
+      properties:
+        user:
+          type: object
+          required: [id, display_name]
+          properties:
+            id: { $ref: '#/components/schemas/Uuid' }
+            display_name: { type: string }
+            avatar_url: { type: [string, 'null'], format: uri }
+        memberships: { type: array, items: { $ref: '#/components/schemas/Member' } }
+    Player:
+      type: object
+      required: [id, organization_id, display_name, status]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        organization_id: { $ref: '#/components/schemas/Uuid' }
+        display_name: { type: string, maxLength: 100 }
+        preferred_positions: { type: array, items: { type: string }, maxItems: 4 }
+        avatar_url: { type: [string, 'null'], format: uri }
+        status: { type: string, enum: [ACTIVE, ARCHIVED] }
+    CreatePlayerRequest:
+      type: object
+      required: [display_name]
+      properties:
+        display_name: { type: string, minLength: 1, maxLength: 100 }
+        phone_e164: { type: string, pattern: '^\+[1-9][0-9]{7,14}$' }
+        preferred_positions: { type: array, items: { type: string }, maxItems: 4 }
+    PlayerList:
+      allOf:
+        - $ref: '#/components/schemas/CursorPage'
+        - type: object
+          properties: { items: { type: array, items: { $ref: '#/components/schemas/Player' } } }
+    PhoneLookupRequest:
+      type: object
+      required: [phone_e164]
+      properties: { phone_e164: { type: string, pattern: '^\+[1-9][0-9]{7,14}$' } }
+    PhoneLookupResponse:
+      type: object
+      required: [found]
+      properties:
+        found: { type: boolean }
+        player:
+          oneOf:
+            - $ref: '#/components/schemas/Player'
+            - type: 'null'
+    Team:
+      type: object
+      required: [id, organization_id, name, status]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        organization_id: { $ref: '#/components/schemas/Uuid' }
+        name: { type: string, minLength: 2, maxLength: 100 }
+        short_name: { type: [string, 'null'], maxLength: 20 }
+        badge_url: { type: [string, 'null'], format: uri }
+        primary_color: { type: [string, 'null'], pattern: '^#[0-9A-Fa-f]{6}$' }
+        status: { type: string, enum: [ACTIVE, ARCHIVED] }
+    CreateTeamRequest:
+      type: object
+      required: [organization_id, name]
+      properties:
+        organization_id: { $ref: '#/components/schemas/Uuid' }
+        name: { type: string, minLength: 2, maxLength: 100 }
+        short_name: { type: string, maxLength: 20 }
+        primary_color: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }
+    UpdateTeamRequest:
+      type: object
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 2, maxLength: 100 }
+        short_name: { type: [string, 'null'], maxLength: 20 }
+        badge_url: { type: [string, 'null'], format: uri }
+        primary_color: { type: [string, 'null'], pattern: '^#[0-9A-Fa-f]{6}$' }
+        status: { type: string, enum: [ACTIVE, ARCHIVED] }
+    TeamList:
+      allOf:
+        - $ref: '#/components/schemas/CursorPage'
+        - type: object
+          properties: { items: { type: array, items: { $ref: '#/components/schemas/Team' } } }
+    TeamMember:
+      type: object
+      required: [player_id, membership_status]
+      properties:
+        player_id: { $ref: '#/components/schemas/Uuid' }
+        default_shirt_number: { type: [integer, 'null'], minimum: 1, maximum: 99 }
+        default_position_code: { type: [string, 'null'], example: MID }
+        membership_status: { type: string, enum: [ACTIVE, INACTIVE] }
+    TeamMemberList:
+      type: object
+      required: [team_id, items]
+      properties:
+        team_id: { $ref: '#/components/schemas/Uuid' }
+        items: { type: array, items: { $ref: '#/components/schemas/TeamMember' } }
+    ReplaceTeamMembersRequest:
+      type: object
+      required: [members]
+      properties:
+        members: { type: array, minItems: 1, maxItems: 60, items: { $ref: '#/components/schemas/TeamMember' } }
+    Venue:
+      type: object
+      required: [id, organization_id, name, timezone]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        organization_id: { $ref: '#/components/schemas/Uuid' }
+        name: { type: string, maxLength: 120 }
+        address: { type: [string, 'null'], maxLength: 500 }
+        timezone: { type: string }
+    CreateVenueRequest:
+      type: object
+      required: [organization_id, name, timezone]
+      properties:
+        organization_id: { $ref: '#/components/schemas/Uuid' }
+        name: { type: string, minLength: 2, maxLength: 120 }
+        address: { type: string, maxLength: 500 }
+        timezone: { type: string, example: Asia/Kolkata }
+    VenueList:
+      allOf:
+        - $ref: '#/components/schemas/CursorPage'
+        - type: object
+          properties: { items: { type: array, items: { $ref: '#/components/schemas/Venue' } } }
+    Competition:
+      type: object
+      required: [id, organization_id, name, format, timezone, status]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        organization_id: { $ref: '#/components/schemas/Uuid' }
+        name: { type: string }
+        format: { type: string, enum: [LEAGUE, KNOCKOUT, HYBRID, FRIENDLY_SERIES] }
+        timezone: { type: string }
+        status: { type: string, enum: [DRAFT, PUBLISHED, COMPLETED, ARCHIVED] }
+    CreateCompetitionRequest:
+      type: object
+      required: [organization_id, name, format, timezone]
+      properties:
+        organization_id: { $ref: '#/components/schemas/Uuid' }
+        name: { type: string, minLength: 2, maxLength: 160 }
+        format: { type: string, enum: [LEAGUE, KNOCKOUT, HYBRID, FRIENDLY_SERIES] }
+        timezone: { type: string }
+        points_rules:
+          type: object
+          properties:
+            win: { type: integer, default: 3 }
+            draw: { type: integer, default: 1 }
+            loss: { type: integer, default: 0 }
+    CompetitionList:
+      allOf:
+        - $ref: '#/components/schemas/CursorPage'
+        - type: object
+          properties: { items: { type: array, items: { $ref: '#/components/schemas/Competition' } } }
+    MatchFormat:
+      type: object
+      required: [code, players_per_side, period_count, total_duration_seconds]
+      properties:
+        code: { type: string, enum: [5V5, 6V6, 8V8, 11V11, CUSTOM] }
+        players_per_side: { type: integer, minimum: 2, maximum: 11 }
+        period_count: { type: integer, minimum: 1, maximum: 4 }
+        total_duration_seconds: { type: integer, minimum: 600, maximum: 10800 }
+        substitutions_allowed: { type: [integer, 'null'], minimum: 0 }
+    MatchSideInput:
+      type: object
+      required: [display_name]
+      properties:
+        team_id: { type: [string, 'null'], format: uuid }
+        display_name: { type: string, minLength: 1, maxLength: 100 }
+    CreateMatchRequest:
+      type: object
+      required: [organization_id, format, home, away]
+      properties:
+        organization_id: { $ref: '#/components/schemas/Uuid' }
+        competition_id: { type: [string, 'null'], format: uuid }
+        venue_id: { type: [string, 'null'], format: uuid }
+        venue_name: { type: [string, 'null'], maxLength: 120 }
+        scheduled_start_at: { type: [string, 'null'], format: date-time }
+        format: { $ref: '#/components/schemas/MatchFormat' }
+        home: { $ref: '#/components/schemas/MatchSideInput' }
+        away: { $ref: '#/components/schemas/MatchSideInput' }
+    UpdateMatchRequest:
+      type: object
+      minProperties: 1
+      properties:
+        venue_id: { type: [string, 'null'], format: uuid }
+        venue_name: { type: [string, 'null'], maxLength: 120 }
+        scheduled_start_at: { type: [string, 'null'], format: date-time }
+        format: { $ref: '#/components/schemas/MatchFormat' }
+    MatchSummary:
+      type: object
+      required: [id, organization_id, status, home, away, score, event_sequence]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        organization_id: { $ref: '#/components/schemas/Uuid' }
+        competition_id: { type: [string, 'null'], format: uuid }
+        status: { type: string, enum: [DRAFT, SCHEDULED, READY, LIVE, PAUSED, COMPLETED, FINALIZED, ABANDONED] }
+        scheduled_start_at: { type: [string, 'null'], format: date-time }
+        home: { $ref: '#/components/schemas/MatchSide' }
+        away: { $ref: '#/components/schemas/MatchSide' }
+        score: { $ref: '#/components/schemas/Score' }
+        event_sequence: { type: integer, minimum: 0 }
+    MatchSide:
+      type: object
+      required: [side, display_name]
+      properties:
+        side: { type: string, enum: [HOME, AWAY] }
+        team_id: { type: [string, 'null'], format: uuid }
+        display_name: { type: string }
+    MatchDetail:
+      allOf:
+        - $ref: '#/components/schemas/MatchSummary'
+        - type: object
+          required: [format, roster, live_state]
+          properties:
+            venue:
+              oneOf:
+                - $ref: '#/components/schemas/Venue'
+                - type: 'null'
+            format: { $ref: '#/components/schemas/MatchFormat' }
+            roster: { $ref: '#/components/schemas/MatchRoster' }
+            live_state: { $ref: '#/components/schemas/LiveSnapshot' }
+    MatchList:
+      allOf:
+        - $ref: '#/components/schemas/CursorPage'
+        - type: object
+          properties: { items: { type: array, items: { $ref: '#/components/schemas/MatchSummary' } } }
+    MatchParticipant:
+      type: object
+      required: [id, side, shirt_number, display_name, participation_status]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        player_id: { type: [string, 'null'], format: uuid }
+        side: { type: string, enum: [HOME, AWAY] }
+        shirt_number: { type: integer, minimum: 1, maximum: 99 }
+        display_name: { type: string, maxLength: 100 }
+        position_code: { type: [string, 'null'], maxLength: 16 }
+        participation_status: { type: string, enum: [STARTER, BENCH, NOT_SELECTED, LEFT_MATCH] }
+        pitch_slot: { type: [string, 'null'], maxLength: 32 }
+    MatchRoster:
+      type: object
+      required: [match_id, home, away]
+      properties:
+        match_id: { $ref: '#/components/schemas/Uuid' }
+        home: { type: array, items: { $ref: '#/components/schemas/MatchParticipant' } }
+        away: { type: array, items: { $ref: '#/components/schemas/MatchParticipant' } }
+    ReplaceRosterRequest:
+      type: object
+      required: [home, away]
+      properties:
+        home: { type: array, minItems: 1, maxItems: 60, items: { $ref: '#/components/schemas/MatchParticipant' } }
+        away: { type: array, minItems: 1, maxItems: 60, items: { $ref: '#/components/schemas/MatchParticipant' } }
+    LineupSnapshot:
+      type: object
+      required: [match_id, sequence, home, away]
+      properties:
+        match_id: { $ref: '#/components/schemas/Uuid' }
+        sequence: { type: integer }
+        home: { type: array, items: { $ref: '#/components/schemas/MatchParticipant' } }
+        away: { type: array, items: { $ref: '#/components/schemas/MatchParticipant' } }
+    SetLineupsRequest:
+      type: object
+      required: [home_starter_ids, away_starter_ids]
+      properties:
+        home_starter_ids: { type: array, minItems: 2, maxItems: 11, items: { $ref: '#/components/schemas/Uuid' } }
+        away_starter_ids: { type: array, minItems: 2, maxItems: 11, items: { $ref: '#/components/schemas/Uuid' } }
+        pitch_slots:
+          type: object
+          additionalProperties: { type: string, maxLength: 32 }
+    MatchStatusCommand:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [SCHEDULED, READY, LIVE, PAUSED, COMPLETED, FINALIZED, ABANDONED] }
+        reason: { type: string, maxLength: 500 }
+    Score:
+      type: object
+      required: [home, away]
+      properties:
+        home: { type: integer, minimum: 0 }
+        away: { type: integer, minimum: 0 }
+    LiveSnapshot:
+      type: object
+      required: [match_id, status, score, event_sequence]
+      properties:
+        match_id: { $ref: '#/components/schemas/Uuid' }
+        status: { type: string }
+        score: { $ref: '#/components/schemas/Score' }
+        event_sequence: { type: integer, minimum: 0 }
+        period_number: { type: [integer, 'null'], minimum: 1 }
+        elapsed_seconds: { type: integer, minimum: 0 }
+        clock_state: { type: string, enum: [NOT_STARTED, RUNNING, PAUSED, ENDED] }
+        updated_at: { $ref: '#/components/schemas/Timestamp' }
+    CreateLiveSessionRequest:
+      type: object
+      required: [expected_status_version]
+      properties:
+        expected_status_version: { type: integer, minimum: 0 }
+        scorer_member_id: { type: [string, 'null'], format: uuid }
+    LiveSession:
+      allOf:
+        - $ref: '#/components/schemas/LiveSnapshot'
+        - type: object
+          required: [id, started_at]
+          properties:
+            id: { $ref: '#/components/schemas/Uuid' }
+            started_at: { $ref: '#/components/schemas/Timestamp' }
+            active_scorer_member_id: { type: [string, 'null'], format: uuid }
+    LiveSessionCommand:
+      type: object
+      required: [command, expected_sequence]
+      properties:
+        command: { type: string, enum: [PAUSE, RESUME, END_PERIOD, START_NEXT_PERIOD, END_MATCH] }
+        expected_sequence: { type: integer, minimum: 0 }
+    EventSubject:
+      type: object
+      required: [role, participant_id]
+      properties:
+        role: { type: string, enum: [PRIMARY, SCORER, ASSISTER, OPPONENT, GOALKEEPER, PLAYER_ON, PLAYER_OFF, CARD_RECIPIENT] }
+        participant_id: { $ref: '#/components/schemas/Uuid' }
+    MatchEvent:
+      type: object
+      required: [id, match_id, sequence, action_code, side, occurred_at, match_elapsed_seconds, recorded_at, subjects, state]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        client_event_id: { $ref: '#/components/schemas/Uuid' }
+        match_id: { $ref: '#/components/schemas/Uuid' }
+        sequence: { type: integer, minimum: 1 }
+        action_code: { type: string, example: GOAL }
+        action_catalog_version: { type: integer, minimum: 1 }
+        side: { type: string, enum: [HOME, AWAY] }
+        period_number: { type: integer, minimum: 1 }
+        match_elapsed_seconds: { type: integer, minimum: 0 }
+        occurred_at: { $ref: '#/components/schemas/Timestamp' }
+        recorded_at: { $ref: '#/components/schemas/Timestamp' }
+        recorded_by_member_id: { $ref: '#/components/schemas/Uuid' }
+        subjects: { type: array, minItems: 1, items: { $ref: '#/components/schemas/EventSubject' } }
+        qualifiers: { type: object, additionalProperties: true }
+        state: { type: string, enum: [CONFIRMED, REVERSED] }
+        reverses_event_id: { type: [string, 'null'], format: uuid }
+    AppendMatchEventRequest:
+      type: object
+      required: [client_event_id, expected_sequence, action_code, side, subjects]
+      properties:
+        client_event_id: { $ref: '#/components/schemas/Uuid' }
+        expected_sequence: { type: integer, minimum: 0 }
+        action_code: { type: string, minLength: 2, maxLength: 64, example: GOAL }
+        action_catalog_version: { type: integer, minimum: 1 }
+        side: { type: string, enum: [HOME, AWAY] }
+        period_number: { type: integer, minimum: 1 }
+        client_occurred_at: { type: string, format: date-time }
+        client_match_elapsed_seconds: { type: integer, minimum: 0 }
+        subjects: { type: array, minItems: 1, maxItems: 5, items: { $ref: '#/components/schemas/EventSubject' } }
+        qualifiers:
+          type: object
+          properties:
+            finish_type: { type: string, enum: [STRONG_FOOT, WEAK_FOOT, HEADER, VOLLEY, OTHER] }
+            body_part: { type: string, enum: [RIGHT_FOOT, LEFT_FOOT, HEAD, OTHER] }
+            x_pct: { type: number, minimum: 0, maximum: 100 }
+            y_pct: { type: number, minimum: 0, maximum: 100 }
+            reason: { type: string, maxLength: 500 }
+          additionalProperties: false
+    AppendEventResponse:
+      type: object
+      required: [event, snapshot]
+      properties:
+        event: { $ref: '#/components/schemas/MatchEvent' }
+        snapshot: { $ref: '#/components/schemas/LiveSnapshot' }
+    ReverseEventRequest:
+      type: object
+      required: [client_event_id, expected_sequence, reason]
+      properties:
+        client_event_id: { $ref: '#/components/schemas/Uuid' }
+        expected_sequence: { type: integer, minimum: 0 }
+        reason: { type: string, minLength: 3, maxLength: 500 }
+    MatchEventList:
+      allOf:
+        - $ref: '#/components/schemas/CursorPage'
+        - type: object
+          required: [last_sequence]
+          properties:
+            last_sequence: { type: integer, minimum: 0 }
+            items: { type: array, items: { $ref: '#/components/schemas/MatchEvent' } }
+    MatchSnapshot:
+      allOf:
+        - $ref: '#/components/schemas/LiveSnapshot'
+        - type: object
+          required: [lineups, timeline, projection_sequence]
+          properties:
+            lineups: { $ref: '#/components/schemas/LineupSnapshot' }
+            timeline: { type: array, items: { $ref: '#/components/schemas/MatchEvent' } }
+            projection_sequence: { type: integer, minimum: 0 }
+    StatLine:
+      type: object
+      required: [participant_id, metrics]
+      properties:
+        participant_id: { $ref: '#/components/schemas/Uuid' }
+        metrics:
+          type: object
+          additionalProperties: { type: integer, minimum: 0 }
+          example: { goals: 1, assists: 0, shots_on_target: 2, interceptions: 3 }
+    MatchStats:
+      type: object
+      required: [match_id, ledger_sequence, team_metrics, player_lines]
+      properties:
+        match_id: { $ref: '#/components/schemas/Uuid' }
+        ledger_sequence: { type: integer }
+        team_metrics: { type: object, additionalProperties: { type: object, additionalProperties: { type: integer } } }
+        player_lines: { type: array, items: { $ref: '#/components/schemas/StatLine' } }
+    ActionDefinition:
+      type: object
+      required: [code, version, display_label, allowed_positions, required_subject_roles]
+      properties:
+        code: { type: string }
+        version: { type: integer }
+        display_label: { type: string }
+        allowed_positions: { type: array, items: { type: string } }
+        required_subject_roles: { type: array, items: { type: string } }
+        score_delta: { type: integer, enum: [-1, 0, 1] }
+        qualifier_schema: { type: object }
+    ActionCatalogResponse:
+      type: object
+      required: [version, actions]
+      properties:
+        version: { type: integer }
+        actions: { type: array, items: { $ref: '#/components/schemas/ActionDefinition' } }
+    StandingRow:
+      type: object
+      required: [rank, team_id, played, won, drawn, lost, goals_for, goals_against, points]
+      properties:
+        rank: { type: integer, minimum: 1 }
+        team_id: { $ref: '#/components/schemas/Uuid' }
+        played: { type: integer }
+        won: { type: integer }
+        drawn: { type: integer }
+        lost: { type: integer }
+        goals_for: { type: integer }
+        goals_against: { type: integer }
+        points: { type: integer }
+    Standings:
+      type: object
+      required: [competition_id, calculated_at, rows]
+      properties:
+        competition_id: { $ref: '#/components/schemas/Uuid' }
+        calculated_at: { $ref: '#/components/schemas/Timestamp' }
+        rows: { type: array, items: { $ref: '#/components/schemas/StandingRow' } }
+    PublicMatch:
+      type: object
+      required: [id, status, home, away, score, elapsed_seconds, timeline]
+      properties:
+        id: { $ref: '#/components/schemas/Uuid' }
+        status: { type: string }
+        home: { $ref: '#/components/schemas/MatchSide' }
+        away: { $ref: '#/components/schemas/MatchSide' }
+        score: { $ref: '#/components/schemas/Score' }
+        elapsed_seconds: { type: integer }
+        timeline:
+          type: array
+          items:
+            type: object
+            required: [sequence, minute, action_label, side]
+            properties:
+              sequence: { type: integer }
+              minute: { type: integer }
+              action_label: { type: string }
+              side: { type: string, enum: [HOME, AWAY] }
+              actor_display_name: { type: [string, 'null'] }
+    CreateRealtimeTokenRequest:
+      type: object
+      required: [match_ids]
+      properties:
+        match_ids: { type: array, minItems: 1, maxItems: 50, items: { $ref: '#/components/schemas/Uuid' } }
+    RealtimeToken:
+      type: object
+      required: [websocket_url, token, expires_at]
+      properties:
+        websocket_url: { type: string, format: uri }
+        token: { type: string }
+        expires_at: { $ref: '#/components/schemas/Timestamp' }
+        protocol:
+          type: object
+          description: Client sends subscribe then receives match.snapshot.updated notifications.
+          properties:
+            subscribe_example: { type: string, example: '{"type":"subscribe","match_id":"uuid"}' }
