@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>New match</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#101014;--paper:#F7F6F3;--paper-2:#EDEBE6;--rule:#DCD9D2;--rule-d:#33333C;
+  --volt:#4B3BFF;--volt-soft:#EBE9FF;--rust:#E5541F;--go:#0F9D58;--mute:#87857E;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:#DEDBD4;font-family:Archivo,system-ui,sans-serif;color:var(--ink);display:flex;justify-content:center;padding:16px}
+.phone{width:100%;max-width:430px;background:var(--paper);border-radius:18px;overflow:hidden;box-shadow:0 2px 24px rgba(0,0,0,.14)}
+
+.head{background:var(--ink);color:var(--paper);padding:16px}
+.eyebrow{font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:#7C7A85;margin-bottom:6px}
+.h1{font-family:'Barlow Condensed',sans-serif;font-size:26px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;line-height:1}
+
+.step{padding:16px;border-bottom:1px solid var(--rule)}
+.step:last-of-type{border-bottom:0}
+.lbl{font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--mute);margin-bottom:9px;display:flex;align-items:center;gap:7px}
+.n{width:17px;height:17px;border-radius:50%;background:var(--ink);color:var(--paper);font-family:Archivo;font-size:10px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;letter-spacing:0}
+
+input{width:100%;padding:12px 13px;border:1px solid var(--rule);border-radius:9px;font-family:inherit;font-size:14px;background:#fff;color:var(--ink);margin-bottom:8px}
+input:focus{outline:none;border-color:var(--volt)}
+input::placeholder{color:#B5B2AA}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+
+.fmt{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px}
+.f{padding:13px 4px;border:1px solid var(--rule);border-radius:9px;background:#fff;cursor:pointer;font-family:inherit;color:var(--ink);display:flex;flex-direction:column;align-items:center;gap:2px;transition:.12s}
+.f .v{font-family:'Barlow Condensed',sans-serif;font-size:19px;font-weight:700;line-height:1}
+.f .s{font-size:9.5px;color:var(--mute);letter-spacing:.04em}
+.f.on{background:var(--volt);border-color:var(--volt);color:#fff}
+.f.on .s{color:#C9C3FF}
+.note{font-size:11.5px;color:var(--mute);line-height:1.5;background:var(--volt-soft);border-radius:8px;padding:9px 11px}
+
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.ch{padding:9px 14px;border:1px solid var(--rule);border-radius:20px;background:#fff;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:600;letter-spacing:.05em;cursor:pointer;color:var(--ink)}
+.ch.on{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+
+.roster{margin-top:4px}
+.row{display:flex;align-items:center;gap:9px;padding:9px 11px;background:#fff;border:1px solid var(--rule);border-radius:9px;margin-bottom:6px}
+.sh{width:30px;height:30px;border-radius:7px;background:var(--paper-2);font-family:Archivo;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-variant-numeric:tabular-nums}
+.who{flex:1;min-width:0}
+.who .nm{font-size:13.5px;font-weight:500;line-height:1.3}
+.who .mob{font-size:11px;color:var(--mute);font-variant-numeric:tabular-nums}
+.pos{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;letter-spacing:.08em;color:var(--volt);background:var(--volt-soft);padding:4px 8px;border-radius:6px}
+.pos.new{color:var(--go);background:#E4F4EC}
+.del{background:none;border:0;color:#C3C0B8;font-size:17px;cursor:pointer;padding:0 2px;line-height:1}
+
+.add{width:100%;padding:13px;border:1px dashed var(--rule);background:none;border-radius:9px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);cursor:pointer;margin-top:2px}
+.add:active{border-color:var(--volt);color:var(--volt)}
+
+.count{font-size:11.5px;color:var(--mute);margin-top:9px;text-align:center}
+.count b{color:var(--ink)}
+
+.go{margin:0;padding:16px;background:var(--paper-2);border-top:1px solid var(--rule)}
+.kick{width:100%;padding:16px;background:var(--volt);color:#fff;border:0;border-radius:11px;font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;cursor:pointer}
+.kick:active{transform:scale(.98)}
+.kick:disabled{background:#C6C3BC;cursor:default}
+</style>
+</head>
+<body>
+<div class="phone">
+
+  <div class="head">
+    <div class="eyebrow">Set up</div>
+    <div class="h1">New match</div>
+  </div>
+
+  <div class="step">
+    <div class="lbl"><span class="n">1</span>Format</div>
+    <div class="fmt" id="fmt"></div>
+    <div class="note" id="fnote"></div>
+  </div>
+
+  <div class="step">
+    <div class="lbl"><span class="n">2</span>Where and how long</div>
+    <input id="ground" placeholder="Ground name" value="Turf Arena, Gachibowli">
+    <div class="two">
+      <input id="mins" placeholder="Match length" value="40" inputmode="numeric">
+      <input id="halves" placeholder="Halves" value="2" inputmode="numeric">
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="lbl"><span class="n">3</span>Teams</div>
+    <div class="two">
+      <input id="th" placeholder="Home team" value="Gachibowli FC">
+      <input id="ta" placeholder="Away team" value="Kondapur SC">
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="lbl"><span class="n">4</span>Home squad</div>
+    <div class="chips" style="margin-bottom:11px">
+      <button class="ch on">Gachibowli FC</button>
+      <button class="ch">Kondapur SC</button>
+    </div>
+    <div class="roster" id="roster"></div>
+    <button class="add" id="add">+ Add by mobile number</button>
+    <div class="count" id="count"></div>
+  </div>
+
+  <div class="go">
+    <button class="kick" id="kick">Kick off</button>
+  </div>
+
+</div>
+
+<script>
+var formats=[
+  {v:"5v5",s:"futsal",n:5,pos:["GK","DEF","MID","ATT"],mins:30},
+  {v:"6v6",s:"most common",n:6,pos:["GK","DEF","MID","ATT"],mins:40},
+  {v:"8v8",s:"turf",n:8,pos:["GK","CB","LB","RB","CM","LW","RW","ST"],mins:50},
+  {v:"11v11",s:"full pitch",n:11,pos:["GK","CB","LB","RB","CDM","CM","CAM","LW","RW","ST"],mins:90}
+];
+
+var notes={
+  "5v5":"Everyone attacks and defends. Positions stay loose \u2014 cards will show all-round stats.",
+  "6v6":"Four position roles. Short match, so stats normalise per match, not per 90.",
+  "8v8":"Full position set minus the holding roles. Cards look close to 11-a-side.",
+  "11v11":"All ten outfield roles. Per-90 stats work properly at this length."
+};
+
+var squad=[
+  {no:1,n:"Sunil Bhat",m:"98490 21114",p:"GK",fresh:false},
+  {no:4,n:"Vikram Singh",m:"90005 77821",p:"DEF",fresh:false},
+  {no:6,n:"Imran Sheikh",m:"73825 40910",p:"MID",fresh:false},
+  {no:8,n:"Karan Joshi",m:"99590 13376",p:"MID",fresh:false},
+  {no:9,n:"Arjun Khanna",m:"81250 66042",p:"ATT",fresh:false},
+  {no:11,n:"Rahul Menon",m:"70931 28855",p:"ATT",fresh:true}
+];
+
+var pool=[
+  {n:"Dev Prasad",m:"96768 30294"},{n:"Sameer Tandon",m:"82470 51163"},
+  {n:"Nikhil Rao",m:"89850 74420"},{n:"Aditya Gupta",m:"77020 96138"},
+  {n:"Manav Desai",m:"93470 22507"}
+];
+
+var pick=1;
+function $(id){return document.getElementById(id);}
+
+function fmtUI(){
+  $("fmt").innerHTML="";
+  formats.forEach(function(f,i){
+    var b=document.createElement("button");
+    b.className="f"+(pick===i?" on":"");
+    b.innerHTML='<span class="v">'+f.v+'</span><span class="s">'+f.s+'</span>';
+    b.onclick=function(){pick=i;$("mins").value=f.mins;fmtUI();rosterUI();};
+    $("fmt").appendChild(b);
+  });
+  $("fnote").textContent=notes[formats[pick].v];
+}
+
+function rosterUI(){
+  var f=formats[pick];
+  $("roster").innerHTML="";
+  squad.forEach(function(p,i){
+    var d=document.createElement("div");
+    d.className="row";
+    d.innerHTML='<span class="sh">'+p.no+'</span>'+
+      '<span class="who"><span class="nm">'+p.n+'</span><br><span class="mob">'+p.m+'</span></span>'+
+      '<span class="pos'+(p.fresh?" new":"")+'">'+p.p+'</span>'+
+      '<button class="del" data-i="'+i+'">&times;</button>';
+    $("roster").appendChild(d);
+  });
+  document.querySelectorAll(".del").forEach(function(b){
+    b.onclick=function(){squad.splice(parseInt(b.dataset.i,10),1);rosterUI();};
+  });
+  var need=f.n,have=squad.length;
+  $("count").innerHTML="<b>"+have+"</b> added &middot; "+f.v+" needs <b>"+need+"</b> on the pitch"+(have>need?" &middot; "+(have-need)+" on the bench":have<need?" &middot; "+(need-have)+" more":"");
+  $("kick").disabled=have<2;
+}
+
+$("add").onclick=function(){
+  if(!pool.length)return;
+  var p=pool.shift();
+  var used=squad.map(function(s){return s.no;});
+  var no=2;while(used.indexOf(no)>-1)no++;
+  var f=formats[pick];
+  squad.push({no:no,n:p.n,m:p.m,p:f.pos[Math.min(squad.length,f.pos.length-1)],fresh:true});
+  rosterUI();
+};
+
+fmtUI();rosterUI();
+</script>
+</body>
+</html>
