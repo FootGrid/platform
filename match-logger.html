@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Match logger</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#101014;
+  --paper:#F7F6F3;
+  --paper-2:#EDEBE6;
+  --rule:#DCD9D2;
+  --rule-d:#33333C;
+  --volt:#4B3BFF;
+  --rust:#E5541F;
+  --go:#0F9D58;
+  --go-soft:#E4F4EC;
+  --stop:#D93B30;
+  --stop-soft:#FBE9E7;
+  --mute:#87857E;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:#DEDBD4;font-family:Archivo,system-ui,sans-serif;color:var(--ink);display:flex;justify-content:center;padding:16px}
+.phone{width:100%;max-width:430px;background:var(--paper);border-radius:18px;overflow:hidden;box-shadow:0 2px 24px rgba(0,0,0,.14)}
+
+.board{background:var(--ink);color:var(--paper);padding:14px 16px 16px}
+.comp{font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:#7C7A85;margin-bottom:12px;display:flex;justify-content:space-between}
+.live{color:#FF5C4D;display:flex;align-items:center;gap:5px}
+.dot{width:6px;height:6px;border-radius:50%;background:#FF5C4D;display:inline-block}
+
+.rows{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px}
+.team{display:flex;flex-direction:column;gap:3px;min-width:0}
+.team.r{text-align:right}
+.tn{font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tag{font-family:'Barlow Condensed',sans-serif;font-size:10px;letter-spacing:.16em;color:#7C7A85}
+
+.centre{display:flex;flex-direction:column;align-items:center;gap:4px}
+.tally{display:flex;align-items:center;gap:10px}
+.stepcol{display:flex;flex-direction:column;gap:3px}
+.st{width:24px;height:21px;border:1px solid var(--rule-d);background:transparent;color:#9B99A4;border-radius:5px;cursor:pointer;font-size:10px;line-height:1;display:flex;align-items:center;justify-content:center;padding:0;font-family:inherit}
+.st:active{background:var(--volt);border-color:var(--volt);color:#fff}
+.num{font-family:Archivo,sans-serif;font-size:56px;font-weight:700;line-height:.86;letter-spacing:-.04em;min-width:40px;text-align:center;font-variant-numeric:tabular-nums}
+.dash{font-size:30px;font-weight:400;color:#54525C;line-height:.86;padding:0 1px}
+.num.flash{animation:pop .35s ease}
+@keyframes pop{0%{transform:scale(1)}40%{transform:scale(1.18);color:#8B7BFF}100%{transform:scale(1)}}
+.clock{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:600;letter-spacing:.1em;color:#9B99A4}
+
+.switch{display:grid;grid-template-columns:1fr 1fr;background:var(--paper-2);border-bottom:1px solid var(--rule)}
+.sw{padding:11px 8px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;background:none;border:0;border-bottom:3px solid transparent;color:var(--mute);cursor:pointer;font-family:'Barlow Condensed',sans-serif}
+.sw.on{color:var(--ink);border-bottom-color:var(--volt);background:var(--paper)}
+.sw.on.away{border-bottom-color:var(--rust)}
+
+.bar{padding:10px 16px;border-bottom:1px solid var(--rule);display:flex;justify-content:space-between;align-items:center;gap:10px}
+#hint{font-size:12.5px;color:var(--mute)}
+#hint b{color:var(--ink);font-weight:600}
+.undo{background:var(--paper);border:1px solid var(--rule);color:var(--ink);border-radius:7px;padding:6px 12px;font-size:12px;font-family:inherit;font-weight:500;cursor:pointer;white-space:nowrap}
+.undo:active{transform:scale(.96)}
+
+.sect{padding:13px 16px}
+.lbl{font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--mute);margin-bottom:9px}
+
+.squad{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.pl{background:#fff;border:1px solid var(--rule);border-radius:9px;padding:9px;text-align:left;cursor:pointer;font-family:inherit;color:var(--ink);display:flex;flex-direction:column;gap:1px;transition:.12s}
+.pl:active{transform:scale(.97)}
+.pl .nm{font-size:12.5px;font-weight:500;line-height:1.25}
+.pl .ps{font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:.12em;color:var(--mute)}
+.pl.on{background:var(--volt);border-color:var(--volt);color:#fff}
+.pl.on .ps{color:#C9C3FF}
+
+.numgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.ng{background:#fff;border:1px solid var(--rule);border-radius:9px;padding:10px 4px;cursor:pointer;font-family:Archivo,sans-serif;color:var(--ink);display:flex;flex-direction:column;align-items:center;gap:1px;transition:.12s}
+.ng:active{transform:scale(.95)}
+.ng .n{font-size:19px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.ng .p{font-family:'Barlow Condensed',sans-serif;font-size:10px;letter-spacing:.1em;color:var(--mute)}
+.ng.on{background:var(--rust);border-color:var(--rust);color:#fff}
+.ng.on .p{color:#FFD2C0}
+
+.acts{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+.ac{border-radius:9px;padding:13px 11px;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:600;letter-spacing:.04em;cursor:pointer;border:1px solid var(--rule);background:#fff;color:var(--ink);transition:.1s;text-align:left}
+.ac:active{transform:scale(.96)}
+.ac.g{background:var(--go-soft);border-color:#BFE3D0;color:#0B6E3F}
+.ac.b{background:var(--stop-soft);border-color:#F2C9C4;color:#A32B22}
+.ac.hero{grid-column:span 2;font-size:20px;background:var(--volt);color:#fff;border-color:var(--volt);text-align:center;letter-spacing:.08em}
+.ac.hero.away{background:var(--rust);border-color:var(--rust)}
+
+.mod{position:fixed;inset:0;background:rgba(16,16,20,.55);display:none;align-items:flex-end;justify-content:center;z-index:9}
+.mod.show{display:flex}
+.sheet{width:100%;max-width:430px;background:var(--paper);border-radius:16px 16px 0 0;padding:18px 16px 26px}
+.sheet h3{font-family:'Barlow Condensed',sans-serif;font-size:21px;font-weight:600;margin:0 0 3px;letter-spacing:.03em;text-transform:uppercase}
+.sheet p{margin:0 0 14px;font-size:12px;color:var(--mute)}
+.how{display:grid;grid-template-columns:repeat(2,1fr);gap:7px}
+.oppgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px}
+.skip{width:100%;padding:12px;border:1px solid var(--rule);background:#fff;border-radius:9px;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);cursor:pointer}
+
+.log{padding:12px 16px 16px;border-top:1px solid var(--rule);background:var(--paper-2);min-height:96px}
+.ev{font-size:12.5px;padding:5px 0;display:flex;gap:9px;align-items:baseline;border-bottom:1px solid rgba(0,0,0,.05)}
+.ev:last-child{border:0}
+.ev .t{font-family:'Barlow Condensed',sans-serif;color:var(--mute);min-width:26px;font-size:13px;font-weight:600}
+.ev .who{font-weight:500}
+.ev .what{margin-left:auto;font-family:'Barlow Condensed',sans-serif;font-size:13px;letter-spacing:.04em;font-weight:600}
+.empty{font-size:12px;color:var(--mute);padding-top:8px}
+</style>
+</head>
+<body>
+<div class="phone">
+
+  <div class="board">
+    <div class="comp">
+      <span>Kanpur Sunday League &middot; MD 12</span>
+      <span class="live"><span class="dot"></span>Live</span>
+    </div>
+    <div class="rows">
+      <div class="team">
+        <span class="tn">Kanpur Utd</span>
+        <span class="tag">Home</span>
+      </div>
+      <div class="centre">
+        <div class="tally">
+          <div class="stepcol">
+            <button class="st" data-s="h" data-d="1" aria-label="Home up">&#9650;</button>
+            <button class="st" data-s="h" data-d="-1" aria-label="Home down">&#9660;</button>
+          </div>
+          <span class="num" id="hs">1</span>
+          <span class="dash">&ndash;</span>
+          <span class="num" id="as">0</span>
+          <div class="stepcol">
+            <button class="st" data-s="a" data-d="1" aria-label="Away up">&#9650;</button>
+            <button class="st" data-s="a" data-d="-1" aria-label="Away down">&#9660;</button>
+          </div>
+        </div>
+        <span class="clock" id="clock">63'</span>
+      </div>
+      <div class="team r">
+        <span class="tn">Riverside</span>
+        <span class="tag">Away</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="switch">
+    <button class="sw on" id="swH">Kanpur Utd</button>
+    <button class="sw away" id="swA">Riverside</button>
+  </div>
+
+  <div class="bar">
+    <span id="hint">Tap a player, then what he did</span>
+    <button class="undo" id="undo">Undo</button>
+  </div>
+
+  <div class="sect">
+    <div class="lbl" id="squadlbl">On the pitch</div>
+    <div id="squad"></div>
+  </div>
+
+  <div class="sect" id="zone" style="padding-top:0"></div>
+
+  <div class="log">
+    <div class="lbl">Match log</div>
+    <div id="log"><div class="empty">Nothing logged yet</div></div>
+  </div>
+
+</div>
+
+<div class="mod" id="mod">
+  <div class="sheet" id="sheet"></div>
+</div>
+
+<script>
+var teams={
+ h:{name:"Kanpur Utd",named:true,players:[
+   {n:"Arjun K",p:"ST",no:9},{n:"Rahul M",p:"LW",no:11},{n:"Dev P",p:"RW",no:7},
+   {n:"Sameer T",p:"CAM",no:10},{n:"Karan J",p:"CM",no:8},{n:"Imran S",p:"CDM",no:6},
+   {n:"Vikram S",p:"CB",no:5},{n:"Nikhil R",p:"CB",no:4},{n:"Aditya G",p:"LB",no:3},
+   {n:"Manav D",p:"RB",no:2},{n:"Sunil B",p:"GK",no:1}]},
+ a:{name:"Riverside",named:false,players:[
+   {n:"#9",p:"ST",no:9},{n:"#11",p:"LW",no:11},{n:"#7",p:"RW",no:7},
+   {n:"#10",p:"CAM",no:10},{n:"#8",p:"CM",no:8},{n:"#6",p:"CDM",no:6},
+   {n:"#5",p:"CB",no:5},{n:"#4",p:"CB",no:4},{n:"#3",p:"LB",no:3},
+   {n:"#2",p:"RB",no:2},{n:"#1",p:"GK",no:1}]}
+};
+
+var acts={
+ ST:["Goal","Shot on target","Shot off target","Off the post","Assist","Chance created","Aerial won","Aerial lost","Fouled","Foul"],
+ LW:["Goal","Shot on target","Shot off target","Assist","Chance created","Beat his man","Cross","Lost the ball","Fouled","Foul"],
+ RW:["Goal","Shot on target","Shot off target","Assist","Chance created","Beat his man","Cross","Lost the ball","Fouled","Foul"],
+ CAM:["Goal","Shot on target","Assist","Chance created","Key pass","Beat his man","Recovery","Lost the ball","Fouled","Foul"],
+ CM:["Goal","Shot on target","Assist","Chance created","Recovery","Interception","Tackle won","Lost the ball","Fouled","Foul"],
+ CDM:["Interception","Tackle won","Recovery","Block","Duel won","Duel lost","Dribbled past","Key pass","Fouled","Foul"],
+ CB:["Duel won","Duel lost","Aerial won","Aerial lost","Interception","Clearance","Block","Dribbled past","Header cleared","Foul"],
+ LB:["Duel won","Duel lost","Interception","Clearance","Cross","Chance created","Dribbled past","Recovery","Fouled","Foul"],
+ RB:["Duel won","Duel lost","Interception","Clearance","Cross","Chance created","Dribbled past","Recovery","Fouled","Foul"],
+ GK:["Save","Diving save","Claim","Punch","Sweep","Goal conceded","Long kick","Short distribution","Fouled","Foul"]
+};
+
+var good=["Goal","Shot on target","Assist","Chance created","Aerial won","Duel won","Tackle won","Interception","Clearance","Block","Recovery","Key pass","Beat his man","Save","Diving save","Claim","Punch","Sweep","Cross","Header cleared","Fouled"];
+var bad=["Aerial lost","Duel lost","Dribbled past","Lost the ball","Foul","Goal conceded","Shot off target","Off the post"];
+var goalTypes=["Strong foot","Weak foot","Header","Volley"];
+var contested=["Beat his man","Duel won","Duel lost","Dribbled past","Aerial won","Aerial lost","Foul","Fouled","Tackle won"];
+
+var side="h",sel=null,evs=[],score={h:1,a:0};
+function $(id){return document.getElementById(id);}
+
+function setScore(s,d,anim){
+  score[s]=Math.max(0,score[s]+d);
+  var el=$(s==="h"?"hs":"as");
+  el.textContent=score[s];
+  if(anim){el.classList.remove("flash");void el.offsetWidth;el.classList.add("flash");}
+}
+document.querySelectorAll(".st").forEach(function(b){
+  b.onclick=function(){var d=parseInt(b.dataset.d,10);setScore(b.dataset.s,d,d>0);};
+});
+
+$("swH").onclick=function(){side="h";sel=null;paint();};
+$("swA").onclick=function(){side="a";sel=null;paint();};
+
+function paint(){
+  $("swH").className="sw"+(side==="h"?" on":"");
+  $("swA").className="sw away"+(side==="a"?" on":"");
+  squadUI();actUI();
+}
+
+function squadUI(){
+  var t=teams[side],box=$("squad");
+  box.innerHTML="";
+  $("squadlbl").textContent=t.named?"On the pitch":"Opposition &middot; tap shirt number";
+  $("squadlbl").innerHTML=t.named?"On the pitch":"Opposition &middot; by shirt number";
+  box.className=t.named?"squad":"numgrid";
+  t.players.forEach(function(p,i){
+    var b=document.createElement("button");
+    if(t.named){
+      b.className="pl"+(sel===i?" on":"");
+      b.innerHTML='<span class="nm">'+p.no+' '+p.n+'</span><span class="ps">'+p.p+'</span>';
+    }else{
+      b.className="ng"+(sel===i?" on":"");
+      b.innerHTML='<span class="n">'+p.no+'</span><span class="p">'+p.p+'</span>';
+    }
+    b.onclick=function(){sel=(sel===i?null:i);paint();};
+    box.appendChild(b);
+  });
+}
+
+function actUI(){
+  var z=$("zone");z.innerHTML="";
+  var t=teams[side];
+  if(sel===null){$("hint").textContent="Tap a player, then what he did";return;}
+  var p=t.players[sel];
+  $("hint").innerHTML='Logging for <b>'+(t.named?p.n:t.name+" "+p.n)+'</b> &middot; '+p.p;
+  var l=document.createElement("div");l.className="lbl";l.textContent=p.p+" actions";
+  var g=document.createElement("div");g.className="acts";
+  acts[p.p].forEach(function(a){
+    var b=document.createElement("button");
+    var cls=a==="Goal"?" hero"+(side==="a"?" away":""):good.indexOf(a)>-1?" g":bad.indexOf(a)>-1?" b":"";
+    b.className="ac"+cls;
+    b.textContent=a;
+    b.onclick=function(){
+      if(a==="Goal"){askGoal(p);}
+      else if(contested.indexOf(a)>-1){askOpp(p,a);}
+      else{push(p,a,false);}
+    };
+    g.appendChild(b);
+  });
+  z.appendChild(l);z.appendChild(g);
+}
+
+function askGoal(p){
+  var s=$("sheet");
+  s.innerHTML='<h3>How did he score?</h3><p>One extra tap. Builds his finishing profile.</p><div class="how" id="mopts"></div>';
+  goalTypes.forEach(function(t){
+    var b=document.createElement("button");
+    b.className="ac g";b.textContent=t;
+    b.onclick=function(){
+      push(p,"Goal \u2014 "+t.toLowerCase(),true);
+      setScore(side,1,true);
+      $("mod").classList.remove("show");
+    };
+    $("mopts").appendChild(b);
+  });
+  $("mod").classList.add("show");
+}
+
+function askOpp(p,a){
+  var other=side==="h"?"a":"h",t=teams[other];
+  var s=$("sheet");
+  s.innerHTML='<h3>Against who?</h3><p>Tap the shirt number if you caught it \u2014 or skip. Their card gets the flip side.</p><div class="oppgrid" id="ogrid"></div><button class="skip" id="oskip">Skip &mdash; log anyway</button>';
+  t.players.forEach(function(o){
+    var b=document.createElement("button");
+    b.className="ng";
+    b.innerHTML='<span class="n">'+o.no+'</span><span class="p">'+o.p+'</span>';
+    b.onclick=function(){push(p,a+" vs "+t.name+" #"+o.no,false);$("mod").classList.remove("show");};
+    $("ogrid").appendChild(b);
+  });
+  $("oskip").onclick=function(){push(p,a,false);$("mod").classList.remove("show");};
+  $("mod").classList.add("show");
+}
+
+$("mod").onclick=function(e){if(e.target.id==="mod")$("mod").classList.remove("show");};
+
+function push(p,a,isGoal){
+  var t=teams[side];
+  evs.push({p:(t.named?p.n:t.name+" #"+p.no),a:a,m:63,g:!!isGoal,s:side});
+  logUI();
+}
+
+function logUI(){
+  var L=$("log");
+  if(!evs.length){L.innerHTML='<div class="empty">Nothing logged yet</div>';return;}
+  L.innerHTML=evs.slice(-5).reverse().map(function(e){
+    var base=e.a.split(" vs ")[0];
+    var c=e.g?(e.s==="a"?"var(--rust)":"var(--volt)"):good.indexOf(base)>-1?"var(--go)":bad.indexOf(base)>-1?"var(--stop)":"var(--mute)";
+    return '<div class="ev"><span class="t">'+e.m+"'</span><span class=\"who\">"+e.p+'</span><span class="what" style="color:'+c+'">'+e.a+'</span></div>';
+  }).join("");
+}
+
+$("undo").onclick=function(){
+  var last=evs.pop();
+  if(last&&last.g)setScore(last.s,-1,false);
+  logUI();
+};
+
+paint();logUI();
+</script>
+</body>
+</html>
